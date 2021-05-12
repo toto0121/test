@@ -1,0 +1,526 @@
+<html>
+<head>
+  <title>3回見たら死ぬ</title>
+  <meta charset="UTF-8">
+</head>
+<body>
+    <svg id="svg1" viewBox="0 0 800 370" >
+      <defs>
+        <pattern id="myPattern"
+                 x="0" y="0" width="60" height="60" patternUnits="userSpaceOnUse" >
+      <!-- start pattern-->
+            <image x="0" y="0" width="60" height="60" href="images/background/bg.png" />
+      <!-- end pattern -->
+        </pattern>
+        <pattern id="myPatternNoroi"
+                 x="0" y="0" width="800" height="530" patternUnits="userSpaceOnUse" >
+      <!-- start pattern-->
+            <image x="0" y="0" width="800" height="530" href="images/background/bg_noroi.jpg" />
+      <!-- end pattern -->
+        </pattern>
+      </defs>
+      <rect id="bg" x="0" y="0" width="800" height="400" fill="url(#myPattern)"></rect>
+    </svg>
+    <!-- The core Firebase JS SDK is always required and must be listed first -->
+<script src="https://www.gstatic.com/firebasejs/8.2.2/firebase-app.js"></script>
+
+<!-- TODO: Add SDKs for Firebase products that you want to use
+     https://firebase.google.com/docs/web/setup#available-libraries -->
+<script src="https://www.gstatic.com/firebasejs/8.2.2/firebase-analytics.js"></script>
+<script src="https://www.gstatic.com/firebasejs/7.23.0/firebase-firestore.js"></script>
+
+<script>
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  var firebaseConfig = {
+    apiKey: "AIzaSyD_-pmrxQTPgMjuPQP2YfKq8KeKS6NaIpk",
+    authDomain: "numslot-fc01b.firebaseapp.com",
+    databaseURL: "https://numslot-fc01b-default-rtdb.firebaseio.com",
+    projectId: "numslot-fc01b",
+    storageBucket: "numslot-fc01b.appspot.com",
+    messagingSenderId: "1079079678779",
+    appId: "1:1079079678779:web:b14f9641ca62c84d9b3d1e",
+    measurementId: "G-E0N5SK8PGV"
+  };
+  // Initialize Firebase
+  firebase.initializeApp(firebaseConfig);
+  firebase.analytics();
+
+  const db = firebase.firestore();
+  const svg = document.getElementById("svg1");
+  let ref = db.collection("matching").doc("game1");
+  const cardArr = [];
+  const cardStat = [];
+  const cardNum = 19;
+  const cardSelectObj = [];
+  const cardBackObj = [];
+  const cardFrontObj = [];
+  const cardHitObj = [];
+  let selectingCard = -1;
+  let curseCount = [0,0,0];
+  let eyeClose = [0,0,0];
+  let score = [10,20];
+  let myId, playerNum, playerNames, playingPlayer, playingId;
+  let setCards = false;
+  const playerInfo = [];
+  let cursedTurn = false;
+  let closingPlayers = [];
+  let opponentSelectingCards = [];
+  let defeated = false;
+  let gameEnd = false;
+  let healedTurn = 0;
+
+
+
+  function setAttributes(obj, cmd) {
+    for (var i=0; i+1<cmd.length; i+=2) {
+        obj.setAttribute(cmd[i], cmd[i+1]);
+    }
+  }
+  function addObj(parent, objtype, cmd) {
+    obj = document.createElementNS('http://www.w3.org/2000/svg',objtype);
+    setAttributes(obj, cmd);
+    parent.appendChild(obj);
+    return obj;
+  }
+
+  const addImageObj = (parent, cmd, filePath) => {
+    const obj = addObj(parent, 'image', cmd)
+    obj.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", filePath);
+    return obj;
+}
+
+  function floatInObj(parent, objtype, cmd, ratio) {
+    const obj = addObj(parent, objtype, cmd);
+    obj.setAttribute("opacity", 0);
+    floatInAnimate(obj, 10, ratio);
+    return obj;
+}
+
+function floatInAnimate(obj, interval, ratio) {
+    let a = parseFloat(obj.getAttribute("opacity"));
+    a += 0.01;
+    if (a > ratio) obj.setAttribute("opacity", ratio);
+    else {
+        obj.setAttribute("opacity", a);
+        window.setTimeout(function () { floatInAnimate(obj, interval, ratio); }, interval);
+    }
+}
+
+  function swap(a,b)
+  {
+    buf = cardArr[a];
+    cardArr[a] = cardArr[b];
+    cardArr[b] = buf;
+  }
+  function init()
+  {
+    for (let i=0; i<cardArr.length; ) cardArr.pop();
+    while (cardStat.length > 0) cardStat.pop();
+    for (let i=0; i<cardNum;i++) {
+      cardArr.push(Math.floor(i/2)+".jpg");
+      cardStat.push(0);
+    }
+    for (let i=16; i<19; i++) cardArr[i] = "failed2.jpg"
+    for (let i=0; i<1000; i++){
+      swap (Math.floor(Math.random() * cardNum),Math.floor(Math.random() * cardNum));
+    }
+    
+
+      console.log(cardArr);
+      ref.set({
+      cards: cardArr,
+      stat : cardStat,
+      players : [],
+      playingPlayer : 0,
+      score : [0,0,0],
+      curse : [0,0,0],
+      closingPlayers : [],
+      selectingCards : [],
+      cursedAnnounce : [],
+      }).then(function() {
+        console.log("Document successfully written!");
+      })
+      .catch(function(error) {
+        console.error("Error writing document: ", error);
+      });
+  }
+
+  
+
+  function flip(a,b)
+  {
+    let st = [];
+    for (let i=0; i<cardStat.length; i++) st.push(cardStat[i]);
+    st[a] = 1;
+    st[b] = 1;
+    ref.update({stat:st});
+
+    if (cardArr[a] == cardArr[b]) 
+    {
+      if (cardArr[a] == "6.jpg")
+      {
+        let cc = curseCount;
+        cc[myId] = Math.max(0, curseCount[myId] - 1);
+        
+        ref.update({curse:cc})
+      } 
+      window.setTimeout(function() {
+        st[a] = 2;
+        st[b] = 2;
+        score[myId]++;
+      },2000);
+    }
+    else window.setTimeout(function() {
+      st[a] = 0;
+      st[b] = 0;
+    },2000);
+    
+    window.setTimeout(function() {
+      let nextPlayer = (playingPlayer + 1) % playerNum;
+      while (curseCount[nextPlayer] >= 3) {
+        nextPlayer = (nextPlayer + 1) % playerNum;
+        if (nextPlayer == myId) break;
+      }
+      ref.update({
+        stat:st,
+        playingPlayer: nextPlayer,
+        score: score,
+        selectingCards : [],
+      });
+      selectingCard = -1;
+      cardSelectObj[a].setAttribute("display","none");
+      cardSelectObj[b].setAttribute("display","none");
+    }, 2001);
+
+  }
+
+  function draw()
+  {
+    console.log("cursedTurn:" + cursedTurn);
+    if (setCards == false) drawInit();
+    document.getElementById("turn").setAttribute("y",playingPlayer*100+35);
+    while (playerInfo.length < playerNum) {
+      const obj = addObj(svg,"g",["transform","translate(450,"+(playerInfo.length*100+38)+")"]);
+      addObj(obj, "rect",["fill","white","width",250,"height",80,"rx",5,"ry",5]);
+      addObj(obj, "text",["x",70,"y",28,"font-size",17]).textContent = playerNames[playerInfo.length];
+      addObj(obj, "text",["x",230,"y",28,"font-size",17,"stroke","#CC0000","text-anchor","end"]).textContent = "0点";
+      addObj(obj, "line",["x1",70,"y1",38,"x2",240,"y2",38, "stroke","black","stroke-width",1]);
+      addObj(obj, "text",["x",70,"y",52,"font-size",8,"font-weight","bold"]).textContent = "ノロイゲージ";
+      addObj(obj, "rect",["x",70,"y",57,"width",165,"height",13,"fill","#CC0000","rx",5,"ry",5]);
+      addObj(obj, "rect",["x",70,"y",57,"width",165,"height",13,"stroke","black","stroke-width",2,"fill","none","rx",5,"ry",5]);
+      playerInfo.push(obj);
+    }
+    for (let i=0; i<playerNum; i++)
+    {
+      if (playerInfo[i].childNodes.length > 7) {
+        playerInfo[i].childNodes[7].setAttribute("display","none");
+        playerInfo[i].removeChild(playerInfo[i].lastChild);
+      }
+      const eye = addObj(playerInfo[i],"g",["transform","translate(10,15) scale(0.6)"]);
+      if (eyeClose[myId] == 1 && i != myId) continue;
+      if (eyeClose[i] == 0)
+      {
+        addObj(eye, "path",["d","M71,29.67A62.45,62.45,0,0,1,82.75,17.88a43.42,43.42,0,0,0-18.2,6.72,45.09,45.09,0,0,0-4.9-2.8A44.06,44.06,0,0,1,65,6.92c-6.31,2.8-10.83,8.32-13.25,11.91a42.5,42.5,0,0,0-5.81-1.1L41.37,0,36.81,17.73a41.34,41.34,0,0,0-4.85.86c-.34.06-.68.11-1,.18C28.51,15.17,24,9.7,17.75,6.92A43.79,43.79,0,0,1,23,21.2c-1,.4-2,.84-2.93,1.31s-1.85,1-2.76,1.51A43.76,43.76,0,0,0,0,17.88,84,84,0,0,1,12.06,29.41,53,53,0,0,0,.8,44.35L0,45.92.8,47.5c8.48,16.58,24,26.88,40.57,26.88s32.1-10.3,40.57-26.88l.81-1.58-.81-1.57A53.17,53.17,0,0,0,71,29.67ZM41.37,67.46c-13.63,0-26.06-8-33.56-21.54A43.89,43.89,0,0,1,22.37,30c.38-.2.75-.41,1.13-.6a37.32,37.32,0,0,1,16.62-3.87c6,0,12.11.59,17.13,3.07a45.91,45.91,0,0,1,7.07,4.29,45.61,45.61,0,0,1,10.62,13C67.44,59.44,55,67.46,41.37,67.46Z"]);
+        addObj(eye, "path",["d","M41.37,29.39A16.73,16.73,0,1,0,58.1,46.11,16.73,16.73,0,0,0,41.37,29.39Zm0,24.09A7.37,7.37,0,0,1,34,46.11a7.29,7.29,0,0,1,.49-2.57l6.12,2.38L38,39.59a7.25,7.25,0,0,1,3.34-.84,7.37,7.37,0,1,1,0,14.73Z"]);
+      }
+      else 
+      {
+        addObj(eye, "path",["transform","translate(0,35)","d","M65.44,15.83A43.91,43.91,0,0,0,82.75,22,64,64,0,0,1,71.84,11.3a45.62,45.62,0,0,0,6.31-6.5L72.09,0A37.83,37.83,0,0,1,59.25,10.4a37.33,37.33,0,0,1-16.63,3.88A37.4,37.4,0,0,1,26,10.4,37.7,37.7,0,0,1,13.16,0L7.09,4.8A46.34,46.34,0,0,0,11.91,10,62.16,62.16,0,0,1,0,22,43.22,43.22,0,0,0,18.5,15a43.62,43.62,0,0,0,4.06,2.29l.61.29a44.49,44.49,0,0,1-5.42,15.31C24.32,30,28.94,24.14,31.29,20.58a45.81,45.81,0,0,0,5.39,1l4.69,18.23,4.63-18a44.08,44.08,0,0,0,5.79-.8c2.44,3.59,6.94,9.07,13.21,11.85a44,44,0,0,1-5.24-14.28c1-.41,2-.84,2.92-1.32S64.54,16.36,65.44,15.83Z"]);
+      }
+    }
+    for (let i=0; i<cardNum; i++)
+    {
+      if (cardStat[i] == 0) {
+        cardBackObj[i].setAttribute("display","inline");
+        cardFrontObj[i].setAttribute("display","none");
+      }
+      else if (cardStat[i] == 1) {
+        cardBackObj[i].setAttribute("display","inline");
+        cardFrontObj[i].setAttribute("display","inline");
+        if (cardArr[i].indexOf("failed") >= 0 && eyeClose[myId] == 0 && !cursedTurn) {
+          if (playingPlayer == myId)
+          {
+            curseCount[myId]++;
+            ref.update({curse:curseCount});
+          }
+          else
+          {
+            ref.update({cursedAnnounce:firebase.firestore.FieldValue.arrayUnion(myId)});
+          }
+          cursedTurn = true;
+          document.getElementById("bg").setAttribute("fill","url(#myPatternNoroi)");
+          
+        }
+      }
+      else {
+        cardBackObj[i].setAttribute("display","none");
+        cardFrontObj[i].setAttribute("display","none");
+      }
+    }
+    for (let i=0; i<playerNum; i++) {
+      playerInfo[i].childNodes[2].textContent = score[i]+"点";
+      playerInfo[i].childNodes[5].setAttribute("width",55*Math.min(curseCount[i],3));
+    }
+    if (curseCount[myId] >= 3 && !defeated) {
+      defeated = true;
+      window.setTimeout(function() {
+        floatInObj(svg,"rect",["x",0,"y",0,"width",800,"height",500], 0.8);
+      floatInObj(svg,"text",["x",100,"y",300,"font-size",60,"fill","red"], 0.8).textContent = "DEFEAT";
+      }, 1000)
+    } 
+    if (selectingCard == -1)
+    {
+      for (let i=0; i<cardNum; i++)
+      {
+        cardSelectObj[i].setAttribute("display","none");
+      }
+      for (let i=0; i<opponentSelectingCards.length; i++)
+      {
+        cardSelectObj[opponentSelectingCards[i]].setAttribute("display","inline");
+      }
+    }
+    let defeatCount = 0;
+    for (let i=0; i<playerNum; i++)
+    {
+      if (curseCount[i] >= 3) defeatCount++;
+    }
+    let cardCount = 0;
+    for (let i=0; i<cardNum; i++)
+    {
+      if (cardStat[i] == 2) cardCount++;
+    }
+    if (playerNum > 1)
+    {
+      if (playerNum - defeatCount <= 1 || cardCount == cardNum)
+      {
+        showResult();
+      }
+    }
+  }
+
+  function drawInit() {
+    for (let i=0; i<cardNum;i++) {
+      let x = 100 + i%5 * 60;
+      let y = 40 + Math.floor(i/5) * 80;
+      let w = 52, h = 70;
+      cardSelectObj.push(addObj(svg,"rect",["x",x-5,"y",y-5,"width",w+10,"height",h+10,"fill","#FF5500","display","none"]));
+      cardBackObj.push(addImageObj(svg,["x",x,"y",y, "height",h,"rx",50,"ry",50],"images/cards/ura.png"));
+      cardFrontObj.push(addImageObj(svg,["x",x,"y",y,"height",h,"display","none"],"images/cards/"+cardArr[i]));
+    }
+    addObj(svg, "rect",["width",800,"height",500,"id","mask","display","none"]);
+    for (let i=0; i<cardNum;i++) {
+      let x = 100 + i%5 * 60;
+      let y = 40 + Math.floor(i/5) * 80;
+      let w = 55, h = 70;
+        cardHitObj.push(addObj(svg,"rect",["x",x,"y",y,"width",w,"height",h,"stroke","black","stroke-width",4,"fill","black","opacity",0,"onclick","select("+i+")", "cursor","pointer"]));
+      }
+    setCards = true;
+
+    addObj(svg, "rect",["id","turn","x",447,"y",35,"width",256,"height",86,"rx",8,"ry",8,"fill","#CC0000"]);
+  }
+
+  function showResult()
+  {
+    return;
+    if (!gameEnd)
+    {
+      gameEnd = true;
+      let winner = 0;
+      let tie = false;
+      for (let i=1; i<playerNum; i++)
+      {
+        if (Math.min(score[i],(3-curseCount[i])*1000) > Math.min(score[winner],(3-curseCount[i])*1000))
+        {
+          winner = i;
+          tie = false;
+        }
+        else if (score[i] == score[winner]) tie = true;
+      }
+      if (tie) alert("引き分け！");
+      else alert(playerNames[winner]+"の勝ち！")
+    }
+  }
+
+  function select (a) {
+    
+    if (myId != playingPlayer) return;
+    if (selectingCard == -2) return;
+    if (cardStat[a] == 2) return;
+    else if (selectingCard < 0) {
+      selectingCard = a;
+      cardSelectObj[a].setAttribute("display","inline");
+      ref.update({selectingCards : firebase.firestore.FieldValue.arrayUnion(a)});
+    }
+    else if (selectingCard == a) {
+      selectingCard = -1;
+      cardSelectObj[a].setAttribute("display","none");
+      ref.update({selectingCards : firebase.firestore.FieldValue.arrayRemove(a)});
+    }
+    else {
+      cardSelectObj[a].setAttribute("display","inline");
+      ref.update({selectingCards : firebase.firestore.FieldValue.arrayUnion(a)});
+      flip(a,selectingCard);
+      selectingCard = -2;
+    }
+  }
+
+  function joinRoom(roomName, playerID) {
+
+    ref = db.collection("matching").doc(roomName);
+    ref.update({
+      players: firebase.firestore.FieldValue.arrayUnion(playerID)
+    });
+
+    ref.onSnapshot(function(doc){
+      let anotherCardId = -1;
+      let d = doc.data();
+      for (let i=0; i<cardNum; i++) {
+        cardArr[i] = d.cards[i];
+        if (cardStat[i] != 1 && d.stat[i] == 1)
+        {
+          if (anotherCardId == -1)
+          {
+            anotherCardId = i;
+          }
+          else
+          {
+            cardStat[i] = 1;
+            cardStat[anotherCardId] = 1;
+            if (cardArr[i] == cardArr[anotherCardId]) 
+            {
+              window.setTimeout(function(){
+                cardStat[i]=2;
+                cardStat[anotherCardId]=2;
+                cursedTurn = false;
+                draw();
+                if(curseCount[myId] < 3) document.getElementById("bg").setAttribute("fill","url(#myPattern)");
+              },2000);
+            }
+            else
+            {
+              window.setTimeout(function(){
+                cardStat[i]=0;
+                cardStat[anotherCardId]=0;
+                cursedTurn = false;
+                draw();
+                if(curseCount[myId] < 3) document.getElementById("bg").setAttribute("fill","url(#myPattern)");
+              },2000);
+            }
+          }
+        }
+        else if (cardStat[i] != 1) cardStat[i] = d.stat[i];
+      }
+      myId = d.players.indexOf(playerID);
+      playerNum = d.players.length;
+      playerNames = d.players;
+      playerNames[myId] += " (あなた)"
+      closingPlayers = d.closingPlayers;
+      for (let i=0; i<playerNum; i++)
+      {
+        if (i == myId) continue;
+        eyeClose[i] = 0;
+      }
+      for(let i=0; i<closingPlayers.length; i++)
+      {
+        if (closingPlayers[i] == myId) continue;
+        eyeClose[closingPlayers[i]] = 1;
+      }
+      if (playingPlayer != d.playingPlayer){
+        playingPlayer = d.playingPlayer;
+        
+      }
+      opponentSelectingCards = d.selectingCards;
+      score = d.score;
+      curseCount = d.curse;
+      if (myId == playingPlayer && d.cursedAnnounce.length > 0)
+      {
+        const arr = [];
+        for(let i=0; i<d.cursedAnnounce.length; i++)
+        {
+          const cursedPlayer = d.cursedAnnounce[i];
+          curseCount[cursedPlayer]++;
+          arr.push(cursedPlayer);
+        }
+        ref.update({
+          cursedAnnounce : firebase.firestore.FieldValue.arrayRemove(...arr),
+          curse : curseCount
+        });
+      }
+      if (myId == -1)
+      {
+        location.reload();
+      }
+      draw();
+      
+    });
+
+
+    document.addEventListener('keydown', (event) => {
+          if (event.keyCode == 17) {  //ctrl
+            if (eyeClose[myId] == 1) return;
+            eyeClose[myId] = 1;
+            document.getElementById("mask").setAttribute("display","inline");
+            ref.update({closingPlayers:firebase.firestore.FieldValue.arrayUnion(myId)});
+            draw();
+          }
+        });
+    document.addEventListener('keyup', (event) => {
+          if (event.keyCode == 17) {  //ctrl
+            eyeClose[myId] = 0;
+            document.getElementById("mask").setAttribute("display","none");
+            ref.update({closingPlayers:firebase.firestore.FieldValue.arrayRemove(myId)});
+            draw();
+          }
+        });
+    document.addEventListener('keydown', (event) => {
+          if (event.keyCode == 27) {  //esc
+            init();
+            //draw();
+          }
+        });
+
+    
+    
+  }
+
+  function buildRoom(roomName)  {
+    ref = db.collection("matching").doc(roomName);
+    init();
+  }
+
+  // URLのパラメータを取得
+var urlParam = location.search.substring(1);
+ 
+ // URLにパラメータが存在する場合
+ if(urlParam) {
+   // 「&」が含まれている場合は「&」で分割
+   var param = urlParam.split('&');
+  
+   // パラメータを格納する用の配列を用意
+   var paramArray = [];
+  
+   // 用意した配列にパラメータを格納
+   for (i = 0; i < param.length; i++) {
+     var paramItem = param[i].split('=');
+     paramArray[paramItem[0]] = paramItem[1];
+   }
+   const game = paramArray["game"], player = decodeURI(paramArray["player"]);
+  if (game != null && player != null) joinRoom(game,player);
+ }
+  
+  
+//ローカルで手番移る→サーバーに送る→他プレイやー　となっているのを修正
+//死んだ人の手番になったときの無限ループ処理(?)
+//回復カードの追加
+//一瞬しかめくれない問題 (公開時間をローカルに)
+//
+
+
+  
+</script>
+
+
+    
+</body>
+</html>
